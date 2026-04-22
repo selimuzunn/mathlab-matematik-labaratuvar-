@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon 2048 — MathLab</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-btn">⬅ Ana Sayfa</a>
+        <h1>🎲 Neon 2048</h1>
+        <p>Aynı sayıları kaydırıp birleştirerek 2048 blokunu elde edin! (Klavye Ok Tuşları, WASD veya Dokunmatik Kaydırma yönleriyle oynayabilirsiniz)</p>
+        <button id="soundBtn" onclick="toggleSound()" title="Müzik Aç/Kapat">🔇</button>
+    </header>
+    <audio id="bgMusic" loop preload="auto" src="mondamusic-calm-soft-499189.mp3"></audio>
+
+    <div class="main-container game2048-container">
+        <div class="game2048-toolbar">
+            <div class="game2048-score">Skor: <span id="scoreVal">0</span></div>
+            <div class="game2048-score">En İyi: <span id="bestVal">0</span></div>
+            <button class="btn" onclick="initGame()">Yeniden Oyna</button>
+        </div>
+
+        <div class="board-2048" id="board" tabindex="0">
+            <div class="grid-base-2048" id="gridBase"></div>
+            <div class="tile-layer-2048" id="tileLayer"></div>
+        </div>
+
+        <div id="resultScreen" style="display:none; text-align:center; padding:10px; font-size:1.5rem; font-weight:800; text-shadow:0 0 15px rgba(255,107,107,.5);">
+            <!-- Oyun Bitti mesajı buraya gelecek -->
+        </div>
+    </div>
+
+    <script>
+        let board = [];
+        let score = 0;
+        let bestScore = localStorage.getItem('2048_mathlab_best') || 0;
+        let tileCounter = 0;
+        const SIZE = 4;
+        let hasWon = false;
+        let isGameOver = false;
+        let isMoving = false; // Spam engellemek için
+
+        const gridBase = document.getElementById('gridBase');
+        const tileLayer = document.getElementById('tileLayer');
+        const scoreEl = document.getElementById('scoreVal');
+        const bestEl = document.getElementById('bestVal');
+        const resultEl = document.getElementById('resultScreen');
+
+        bestEl.textContent = bestScore;
+
+        // Arkaplan ızgarasını (16 hücre) oyuna başlamadan 1 kere oluşturuyoruz
+        for(let i=0; i<16; i++) {
+            const bgCell = document.createElement('div');
+            bgCell.className = 'base-cell';
+            bgCell.innerHTML = '<div class="base-inner"></div>';
+            gridBase.appendChild(bgCell);
+        }
+
+        function initGame() {
+            board = Array(SIZE).fill().map(() => Array(SIZE).fill(null));
+            tileLayer.innerHTML = '';
+            score = 0;
+            hasWon = false;
+            isGameOver = false;
+            isMoving = false;
+            resultEl.style.display = 'none';
+            updateScore();
+            // Başlangıçta 2 rastgele sayı çıkar
+            addRandomTile();
+            addRandomTile();
+        }
+
+        function addRandomTile() {
+            let emptyCells = [];
+            for(let r=0; r<SIZE; r++) {
+                for(let c=0; c<SIZE; c++) {
+                    if(!board[r][c]) emptyCells.push({r, c});
+                }
+            }
+            if(emptyCells.length === 0) return;
+            
+            let spot = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            let val = Math.random() < 0.9 ? 2 : 4;
+            let tile = { id: tileCounter++, r: spot.r, c: spot.c, val: val, el: null, mergedFrom: null };
+            board[spot.r][spot.c] = tile;
+            
+            // DOM elementi oluşturma ve pozisyon verme (CSS Transitons ile % üzerinden yerleşim)
+            let el = document.createElement('div');
+            el.className = `tile-wrapper tile-${val} tile-new`;
+            el.style.transform = `translate(${spot.c * 100}%, ${spot.r * 100}%)`;
+            el.innerHTML = `<div class="tile-inner">${val}</div>`;
+            tileLayer.appendChild(el);
+            tile.el = el;
+        }
+
+        function move(dir) {
+            // dir: 0=Up, 1=Right, 2=Down, 3=Left
+            if(isGameOver || isMoving) return;
+            let moved = false;
+            
+            // Satır kaydırma / Birleştirme yardımcı fonksiyonu
+            function slideLine(line) {
+                // 1. Boşlukları temizle
+                let filtered = line.filter(t => t !== null);
+                // 2. Yanyana olan aynı sayıları birleştir
+                for(let i=0; i<filtered.length-1; i++) {
+                    if(filtered[i].val === filtered[i+1].val) {
+                        filtered[i].val *= 2;
+                        score += filtered[i].val;
+                        // Eski objeyi 'mergedFrom' olarak sakla ki animasyonda silebilelim
+                        filtered[i].mergedFrom = filtered[i+1];
+                        filtered.splice(i+1, 1);
+                    }
+                }
+                // 3. Eksik kareleri arkasına ekle
+                while(filtered.length < SIZE) filtered.push(null);
+                return filtered;
+            }
+
+            let newBoard = Array(SIZE).fill().map(() => Array(SIZE).fill(null));
+            
+            for(let i=0; i<SIZE; i++) {
+                let line = [];
+                // Yönüne göre okuma
+                for(let j=0; j<SIZE; j++) {
+                    if(dir === 0) line.push(board[j][i]);         // Yukarı
+                    if(dir === 1) line.push(board[i][SIZE-1-j]);  // Sağ
+                    if(dir === 2) line.push(board[SIZE-1-j][i]);  // Aşağı
+                    if(dir === 3) line.push(board[i][j]);         // Sol
+                }
+                
+                let newLine = slideLine(line);
+                
+                // Yönüne göre yazma
+                for(let j=0; j<SIZE; j++) {
+                    let targetR = i, targetC = j;
+                    if(dir === 0) { targetR = j; targetC = i; }
+                    if(dir === 1) { targetR = i; targetC = SIZE-1-j; }
+                    if(dir === 2) { targetR = SIZE-1-j; targetC = i; }
+                    if(dir === 3) { targetR = i; targetC = j; }
+                    
+                    newBoard[targetR][targetC] = newLine[j];
+                    
+                    let tile = newLine[j];
+                    if(tile) {
+                        if(tile.r !== targetR || tile.c !== targetC) {
+                            moved = true;
+                            tile.r = targetR;
+                            tile.c = targetC;
+                        }
+                    }
+                }
+            }
+            
+            if(moved) {
+                isMoving = true;
+                board = newBoard;
+                updateDOM();
+                
+                // Animasyonun bitmesini bekleniyor
+                setTimeout(() => {
+                    addRandomTile();
+                    updateScore();
+                    checkGameState();
+                    isMoving = false;
+                }, 160);
+            }
+        }
+
+        function updateDOM() {
+            for(let r=0; r<SIZE; r++) {
+                for(let c=0; c<SIZE; c++) {
+                    let tile = board[r][c];
+                    if(tile) {
+                        // Objeyi yeni koordinatına götür (CSS translate sayesinde kayma animasyonu oluşur)
+                        tile.el.style.transform = `translate(${c * 100}%, ${r * 100}%)`;
+                        tile.el.classList.remove('tile-new'); // yeni gelme efektini kapat
+                        
+                        if(tile.mergedFrom) {
+                            let eaten = tile.mergedFrom;
+                            // Yutulan objeyi aynı vizyona taşı, arkada bırak
+                            eaten.el.style.transform = `translate(${c * 100}%, ${r * 100}%)`;
+                            eaten.el.style.zIndex = 5; 
+                            
+                            // Animasyon bittiğinde çöpten temizle ve kalan objeyi güncelleştir
+                            setTimeout(() => {
+                                if(eaten.el.parentNode) eaten.el.parentNode.removeChild(eaten.el);
+                                tile.el.className = `tile-wrapper tile-${tile.val} tile-merged`;
+                                tile.el.innerHTML = `<div class="tile-inner">${tile.val}</div>`;
+                            }, 150);
+                            
+                            tile.mergedFrom = null;
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkGameState() {
+            let empty = 0;
+            let canMerge = false;
+            for(let r=0; r<SIZE; r++) {
+                for(let c=0; c<SIZE; c++) {
+                    if(!board[r][c]) empty++;
+                    if(board[r][c] && board[r][c].val >= 2048 && !hasWon) {
+                        hasWon = true;
+                        showResult("🎉 2048'e Ulaştınız! (Devam Edip Rekor Kırabilirsiniz)", "#44ff88");
+                    }
+                    if(board[r][c]) {
+                        if(r < SIZE-1 && board[r+1][c] && board[r+1][c].val === board[r][c].val) canMerge = true;
+                        if(c < SIZE-1 && board[r][c+1] && board[r][c+1].val === board[r][c].val) canMerge = true;
+                    }
+                }
+            }
+            if(empty === 0 && !canMerge) {
+                isGameOver = true;
+                showResult("Kilitlendiniz! Hamle Kalmadı. 👾", "#ff6b6b");
+            }
+        }
+
+        function showResult(msg, color) {
+            resultEl.textContent = msg;
+            resultEl.style.color = color;
+            resultEl.style.display = 'block';
+        }
+
+        function updateScore() {
+            scoreEl.textContent = score;
+            if(score > bestScore) {
+                bestScore = score;
+                bestEl.textContent = bestScore;
+                localStorage.setItem('2048_mathlab_best', bestScore);
+            }
+        }
+
+        // --- Klavye Dinlemeleri ---
+        document.addEventListener('keydown', e => {
+            if(['ArrowUp', 'w', 'W'].includes(e.key)) { move(0); e.preventDefault(); }
+            else if(['ArrowRight', 'd', 'D'].includes(e.key)) { move(1); e.preventDefault(); }
+            else if(['ArrowDown', 's', 'S'].includes(e.key)) { move(2); e.preventDefault(); }
+            else if(['ArrowLeft', 'a', 'A'].includes(e.key)) { move(3); e.preventDefault(); }
+        }, {passive: false});
+
+        // --- Touch / Swipe Entegrasyonu ---
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const boardUI = document.getElementById('board');
+
+        boardUI.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, {passive: false});
+
+        boardUI.addEventListener('touchmove', e => {
+            e.preventDefault(); // Ekranda kaydırmayı (scroll) engelle ki oyun oynansın
+        }, {passive: false});
+
+        boardUI.addEventListener('touchend', e => {
+            let touchEndX = e.changedTouches[0].screenX;
+            let touchEndY = e.changedTouches[0].screenY;
+            handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
+        });
+
+        function handleSwipe(startX, startY, endX, endY) {
+            let dx = endX - startX;
+            let dy = endY - startY;
+            // 30 pikselden büyük değilse (çok ufak dokunuşsa) kayda alma
+            if(Math.abs(dx) > Math.abs(dy)) {
+                if(Math.abs(dx) > 30) {
+                    if(dx > 0) move(1); // Sağa
+                    else move(3);       // Sola
+                }
+            } else {
+                if(Math.abs(dy) > 30) {
+                    if(dy > 0) move(2); // Aşağı
+                    else move(0);       // Yukarı
+                }
+            }
+        }
+
+        // --- Evrensel Müzik Motoru ---
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        function toggleSound(){
+            const btn = document.getElementById('soundBtn');
+            if(bgMusic.paused){
+                bgMusic.play().then(()=>{btn.textContent='🔊';btn.classList.add('playing');}).catch(()=>{});
+            } else {
+                bgMusic.pause();btn.textContent='🔇';btn.classList.remove('playing');
+            }
+        }
+
+        // Oyunu hemen başlat
+        initGame();
+    </script>
+</body>
+</html>
