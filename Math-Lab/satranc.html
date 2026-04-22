@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>At Satrancı — MathLab</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .square.visited {
+            font-size: 1.2rem;
+            color: rgba(0, 210, 255, 0.9);
+            font-weight: bold;
+        }
+        .square.visited::after {
+            content: none; /* Metin kullanıldığında noktayı kaldırıyoruz */
+        }
+        .board {
+            /* Mobilde daha iyi sığması için hesaplamalar eklenebilir ama şu an 60px kareler yeterli */
+            background: rgba(15,12,41,.9);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-btn">⬅ Ana Sayfa</a>
+        <h1>♞ At Satrancı</h1>
+        <p>Satranç tahtasındaki tüm kareleri 'L' hareketiyle tam olarak bir kez ziyaret edebilir misiniz?</p>
+        <button id="soundBtn" onclick="toggleSound()" title="Müzik Aç/Kapat">🔇</button>
+    </header>
+    <audio id="bgMusic" loop preload="auto" src="mondamusic-calm-soft-499189.mp3"></audio>
+
+    <div class="main-container chess-container">
+        <div class="chess-toolbar">
+            <select id="sizeSelect" class="btn" onchange="changeSize()" style="background: rgba(123, 47, 247, 0.2); outline: none; padding-right: 15px;">
+                <option value="5" style="background:#1e1946;">5x5</option>
+                <option value="6" style="background:#1e1946;">6x6</option>
+                <option value="7" style="background:#1e1946;">7x7</option>
+                <option value="8" selected style="background:#1e1946;">8x8</option>
+            </select>
+            <div class="score-board">Skor: <span id="scoreVal">0</span> / <span id="maxScore">64</span></div>
+            <button class="btn" onclick="resetGame()">Yeniden Başlat</button>
+            <button class="btn" id="hintBtn" onclick="toggleHint()">İpuçları: Açık</button>
+        </div>
+        
+        <div class="board" id="board"></div>
+        <div id="message" class="game-over"></div>
+    </div>
+
+    <script>
+        const boardEl = document.getElementById('board');
+        const scoreEl = document.getElementById('scoreVal');
+        const messageEl = document.getElementById('message');
+        const hintBtn = document.getElementById('hintBtn');
+        let ROWS = 8;
+        let COLS = 8;
+        
+        let board = [];
+        let visited = [];
+        let knightPos = null;
+        let score = 0;
+        let gameOver = false;
+        let hintsEnabled = true;
+
+        const MOVES = [
+            [-2, -1], [-2, 1], [2, -1], [2, 1],
+            [-1, -2], [-1, 2], [1, -2], [1, 2]
+        ];
+
+        function initBoard() {
+            boardEl.innerHTML = '';
+            board = [];
+            visited = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+            knightPos = null;
+            score = 0;
+            gameOver = false;
+            scoreEl.textContent = '0';
+            messageEl.textContent = '';
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const sq = document.createElement('div');
+                    sq.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+                    sq.dataset.r = r;
+                    sq.dataset.c = c;
+                    sq.onclick = () => handleSquareClick(r, c);
+                    boardEl.appendChild(sq);
+                    board.push({r, c, el: sq});
+                }
+            }
+        }
+
+        function handleSquareClick(r, c) {
+            if (gameOver) return;
+
+            if (knightPos === null) {
+                // İlk yerleştirme
+                moveTo(r, c);
+                return;
+            }
+
+            if (isValidMove(r, c) && !visited[r][c]) {
+                moveTo(r, c);
+            }
+        }
+
+        function moveTo(r, c) {
+            visited[r][c] = true;
+            score++;
+            scoreEl.textContent = score;
+
+            if (knightPos) {
+                const prevSf = getSquare(knightPos.r, knightPos.c);
+                prevSf.classList.remove('active');
+                prevSf.classList.add('visited');
+                prevSf.textContent = score - 1; // Kaçıncı adım olduğunu yaz
+            }
+            
+            knightPos = {r, c};
+            const currSf = getSquare(r, c);
+            currSf.classList.add('active');
+            currSf.textContent = '♞';
+
+            updateHints();
+            checkGameState();
+        }
+
+        function getSquare(r, c) {
+            return board.find(s => s.r === r && s.c === c).el;
+        }
+
+        function isValidMove(r, c) {
+            if (!knightPos) return true;
+            const dr = Math.abs(r - knightPos.r);
+            const dc = Math.abs(c - knightPos.c);
+            return (dr === 2 && dc === 1) || (dr === 1 && dc === 2);
+        }
+
+        function updateHints() {
+            // Temizle
+            board.forEach(s => s.el.classList.remove('valid'));
+            if (!hintsEnabled || gameOver || !knightPos) return;
+
+            // İzin verilen hedef kareleri çiz
+            getValidDestinations().forEach(dest => {
+                getSquare(dest.r, dest.c).classList.add('valid');
+            });
+        }
+
+        function getValidDestinations() {
+            if (!knightPos) return [];
+            return MOVES.map(m => ({r: knightPos.r + m[0], c: knightPos.c + m[1]}))
+                        .filter(dest => dest.r >= 0 && dest.r < ROWS && dest.c >= 0 && dest.c < COLS && !visited[dest.r][dest.c]);
+        }
+
+        function checkGameState() {
+            if (score === ROWS * COLS) {
+                gameOver = true;
+                board.forEach(s => s.el.classList.remove('valid'));
+                messageEl.textContent = "Tebrikler! Oyunu tamamladınız! 🎉";
+                messageEl.style.color = "#44ff88";
+            } else if (knightPos && getValidDestinations().length === 0) {
+                gameOver = true;
+                board.forEach(s => s.el.classList.remove('valid'));
+                messageEl.textContent = "Hamle kalmadı! Skorunuz: " + score;
+                messageEl.style.color = "#ff6b6b";
+            }
+        }
+
+        function toggleHint() {
+            hintsEnabled = !hintsEnabled;
+            hintBtn.textContent = hintsEnabled ? "İpuçları: Açık" : "İpuçları: Kapalı";
+            updateHints();
+        }
+
+        function resetGame() {
+            initBoard();
+        }
+
+        function changeSize() {
+            const s = parseInt(document.getElementById('sizeSelect').value);
+            ROWS = s;
+            COLS = s;
+            document.getElementById('maxScore').textContent = s * s;
+            boardEl.style.gridTemplateColumns = `repeat(${s}, 1fr)`;
+            boardEl.style.gridTemplateRows = `repeat(${s}, 1fr)`;
+            resetGame();
+        }
+
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        function toggleSound(){
+            const btn = document.getElementById('soundBtn');
+            if(bgMusic.paused){
+                bgMusic.play().then(()=>{btn.textContent='🔊';btn.classList.add('playing');}).catch(()=>{});
+            } else {
+                bgMusic.pause();btn.textContent='🔇';btn.classList.remove('playing');
+            }
+        }
+
+        // Başlangıçta tahtayı oluştur
+        initBoard();
+    </script>
+</body>
+</html>

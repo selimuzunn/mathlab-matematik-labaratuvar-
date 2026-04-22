@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Mayın Tarlası — MathLab</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .mayin-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .mayin-toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: rgba(30,25,70,.6);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.1);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .game2048-score {
+            font-size: 1.2rem;
+            color: #fff;
+            font-weight: 700;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(123,47,247,0.3);
+            margin: 0;
+            display: flex; gap: 8px; align-items: center;
+        }
+        .board-wrapper {
+            max-width: 100%;
+            overflow: auto;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(123, 47, 247, 0.2);
+            border: 4px solid #7b2ff7;
+            background: rgba(15, 12, 41, .9);
+            padding: 5px;
+            /* Scrollbar styling */
+            scrollbar-width: thin;
+            scrollbar-color: #7b2ff7 rgba(30,25,70,1);
+        }
+        .board-wrapper::-webkit-scrollbar { height: 8px; width: 8px; }
+        .board-wrapper::-webkit-scrollbar-track { background: rgba(30,25,70,1); border-radius: 4px; }
+        .board-wrapper::-webkit-scrollbar-thumb { background: #7b2ff7; border-radius: 4px; }
+
+        .mayin-board {
+            display: grid;
+            gap: 2px;
+        }
+        .mayin-cell {
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 800;
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+            background: rgba(123, 47, 247, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 2px 5px rgba(255,255,255,0.2);
+            transition: transform 0.1s, background 0.2s;
+        }
+        .mayin-cell:hover:not(.revealed) {
+            background: rgba(123, 47, 247, 0.6);
+        }
+        .mayin-cell:active:not(.revealed) {
+            transform: scale(0.9);
+        }
+        .mayin-cell.revealed {
+            background: rgba(0, 0, 0, 0.4);
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: default;
+        }
+        .mayin-cell.mine {
+            background: rgba(255, 107, 107, 0.3);
+            animation: explode 0.5s ease-out forwards;
+        }
+        @keyframes explode {
+            0% { transform: scale(1); background: #ff6b6b; box-shadow: 0 0 20px #ff6b6b; z-index: 10; }
+            100% { transform: scale(1); background: rgba(255, 107, 107, 0.5); }
+        }
+
+        /* Number Colors */
+        .color-1 { color: #00d2ff; text-shadow: 0 0 8px rgba(0,210,255,.5); }
+        .color-2 { color: #44ff88; text-shadow: 0 0 8px rgba(68,255,136,.5); }
+        .color-3 { color: #fe5555; text-shadow: 0 0 8px rgba(254,85,85,.5); }
+        .color-4 { color: #bd34fe; text-shadow: 0 0 8px rgba(189,52,254,.5); }
+        .color-5 { color: #ffaa00; text-shadow: 0 0 8px rgba(255,170,0,.5); }
+        .color-6 { color: #00ffff; text-shadow: 0 0 8px rgba(0,255,255,.5); }
+        .color-7 { color: #ff8e53; text-shadow: 0 0 8px rgba(255,142,83,.5); }
+        .color-8 { color: #ffffff; text-shadow: 0 0 8px rgba(255,255,255,.5); }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-btn">⬅ Ana Sayfa</a>
+        <h1>💣 Neon Mayın Tarlası</h1>
+        <p>Satırlardaki rakamları analiz edip mayınları bul. Sol Tık: Aç, Sağ Tık (veya Uzun Basma): Bayrak (🚩) Dik.</p>
+        <button id="soundBtn" onclick="toggleSound()" title="Müzik Aç/Kapat">🔇</button>
+    </header>
+    <audio id="bgMusic" loop preload="auto" src="mondamusic-calm-soft-499189.mp3"></audio>
+
+    <div class="main-container mayin-container">
+        <div class="mayin-toolbar">
+            <select id="diffSelect" class="btn" style="background: rgba(123, 47, 247, 0.2); outline: none;" onchange="initGame()">
+                <option value="easy" style="background:#1e1946;">Kolay (9x9, 10 Mayın)</option>
+                <option value="medium" style="background:#1e1946;" selected>Orta (16x16, 40 Mayın)</option>
+                <option value="hard" style="background:#1e1946;">Zor (24x20, 99 Mayın)</option>
+            </select>
+            <button class="btn" onclick="initGame()">Yeniden Başla</button>
+            <div class="game2048-score" title="Kalan Mayın Tahmini">🚩 <span id="flagsLeft">0</span></div>
+            <div class="game2048-score" title="Geçen Süre">⏱ <span id="timeVal">0</span></div>
+        </div>
+
+        <div class="board-wrapper">
+            <div class="mayin-board" id="board" oncontextmenu="return false;"></div>
+        </div>
+
+        <div id="resultScreen" style="display:none; text-align:center; padding:10px; font-size:1.5rem; font-weight:800; color:#44ff88; text-shadow:0 0 15px rgba(68,255,136,.5);">
+            Tebrikler! Tüm alanı temizlediniz. 🎉
+        </div>
+    </div>
+
+    <script>
+        let ROWS, COLS, MINES;
+        let board = [];
+        let flagsCount = 0;
+        let cellsRevealed = 0;
+        let isGameOver = false;
+        let firstClick = true;
+        let timer = null;
+        let timeSeconds = 0;
+
+        const boardEl = document.getElementById('board');
+        const flagsEl = document.getElementById('flagsLeft');
+        const timeEl = document.getElementById('timeVal');
+        const resultEl = document.getElementById('resultScreen');
+
+        // Touch event variables for long press
+        let touchTimer = null;
+        const LONG_PRESS_DUR = 500; // ms
+
+        function setDifficulty() {
+            let d = document.getElementById('diffSelect').value;
+            if(d === 'easy') { ROWS = 9; COLS = 9; MINES = 10; }
+            else if(d === 'medium') { ROWS = 16; COLS = 16; MINES = 40; }
+            else if(d === 'hard') { ROWS = 20; COLS = 24; MINES = 99; }
+        }
+
+        function initGame() {
+            setDifficulty();
+            board = [];
+            flagsCount = MINES;
+            cellsRevealed = 0;
+            isGameOver = false;
+            firstClick = true;
+            timeSeconds = 0;
+            if(timer) clearInterval(timer);
+            timeEl.textContent = timeSeconds;
+            flagsEl.textContent = flagsCount;
+            resultEl.style.display = 'none';
+            resultEl.style.color = '#44ff88';
+            resultEl.style.textShadow = '0 0 15px rgba(68,255,136,.5)';
+
+            boardEl.style.gridTemplateColumns = `repeat(${COLS}, 35px)`;
+            boardEl.style.gridTemplateRows = `repeat(${ROWS}, 35px)`;
+            boardEl.innerHTML = '';
+
+            for(let r=0; r<ROWS; r++) {
+                let rowArray = [];
+                for(let c=0; c<COLS; c++) {
+                    let cellData = {
+                        r: r, c: c,
+                        isMine: false,
+                        isRevealed: false,
+                        isFlagged: false,
+                        neighborMines: 0,
+                        el: document.createElement('div')
+                    };
+                    cellData.el.className = 'mayin-cell';
+                    
+                    // Mouse events
+                    cellData.el.onmousedown = (e) => {
+                        if(e.button === 2) handleFlag(cellData);
+                        else if(e.button === 0) handleReveal(cellData);
+                    };
+
+                    // Touch events (Long press for flag)
+                    cellData.el.ontouchstart = (e) => {
+                        if(isGameOver) return;
+                        touchTimer = setTimeout(() => {
+                            handleFlag(cellData);
+                            touchTimer = null;
+                        }, LONG_PRESS_DUR);
+                    };
+                    cellData.el.ontouchend = (e) => {
+                        if(touchTimer) {
+                            // Touch ended before LONG_PRESS -> It's a click to reveal
+                            clearTimeout(touchTimer);
+                            touchTimer = null;
+                            handleReveal(cellData);
+                        }
+                        e.preventDefault(); // prevent triggering mousedown
+                    };
+                    cellData.el.ontouchmove = () => {
+                        if(touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+                    };
+
+                    boardEl.appendChild(cellData.el);
+                    rowArray.push(cellData);
+                }
+                board.push(rowArray);
+            }
+        }
+
+        function placeMines(firstR, firstC) {
+            let placed = 0;
+            while(placed < MINES) {
+                let r = Math.floor(Math.random() * ROWS);
+                let c = Math.floor(Math.random() * COLS);
+                // Dont place mine on first click or already mined cell
+                if(!board[r][c].isMine && !(Math.abs(r - firstR) <= 1 && Math.abs(c - firstC) <= 1)) {
+                    board[r][c].isMine = true;
+                    placed++;
+                }
+            }
+            // Calc numbers
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if(!board[r][c].isMine) {
+                        let count = 0;
+                        for(let dr=-1; dr<=1; dr++) {
+                            for(let dc=-1; dc<=1; dc++) {
+                                let nr = r+dr, nc = c+dc;
+                                if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS && board[nr][nc].isMine) count++;
+                            }
+                        }
+                        board[r][c].neighborMines = count;
+                    }
+                }
+            }
+        }
+
+        function handleReveal(cell) {
+            if(isGameOver || cell.isRevealed || cell.isFlagged) return;
+
+            if(firstClick) {
+                firstClick = false;
+                placeMines(cell.r, cell.c);
+                timer = setInterval(() => { timeSeconds++; timeEl.textContent = timeSeconds; }, 1000);
+            }
+
+            if(cell.isMine) {
+                gameOver(false);
+                return;
+            }
+
+            revealCellRecursive(cell);
+            checkWin();
+        }
+
+        function handleFlag(cell) {
+            if(isGameOver || cell.isRevealed) return;
+            if(!cell.isFlagged && flagsCount > 0) {
+                cell.isFlagged = true;
+                cell.el.textContent = '🚩';
+                flagsCount--;
+            } else if(cell.isFlagged) {
+                cell.isFlagged = false;
+                cell.el.textContent = '';
+                flagsCount++;
+            }
+            flagsEl.textContent = flagsCount;
+            // Native Haptic Feedback for Mobile browsers if available
+            if(navigator.vibrate) navigator.vibrate(50);
+        }
+
+        function revealCellRecursive(cell) {
+            if(cell.isRevealed || cell.isFlagged) return;
+            cell.isRevealed = true;
+            cell.el.classList.add('revealed');
+            cellsRevealed++;
+
+            if(cell.neighborMines > 0) {
+                cell.el.textContent = cell.neighborMines;
+                cell.el.classList.add('color-' + cell.neighborMines);
+            } else {
+                // If 0, reveal neighbors
+                for(let dr=-1; dr<=1; dr++) {
+                    for(let dc=-1; dc<=1; dc++) {
+                        let nr = cell.r+dr, nc = cell.c+dc;
+                        if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS) {
+                            revealCellRecursive(board[nr][nc]);
+                        }
+                    }
+                }
+            }
+        }
+
+        function gameOver(win) {
+            isGameOver = true;
+            clearInterval(timer);
+            if(win) {
+                resultEl.textContent = `Muazzam! Tüm mayınları temizlediniz 🎉 (${timeSeconds} Saniye)`;
+                resultEl.style.display = 'block';
+            } else {
+                resultEl.textContent = "BOM! Mayına bastınız 💥";
+                resultEl.style.color = "#ff6b6b";
+                resultEl.style.textShadow = "0 0 15px rgba(255,107,107,.5)";
+                resultEl.style.display = 'block';
+                // Reveal all mines safely
+                for(let r=0; r<ROWS; r++) {
+                    for(let c=0; c<COLS; c++) {
+                        if(board[r][c].isMine) {
+                            board[r][c].el.classList.add('revealed', 'mine');
+                            board[r][c].el.textContent = '💣';
+                        } else if(board[r][c].isFlagged) {
+                            // Wrong flag mark
+                            board[r][c].el.textContent = '❌';
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkWin() {
+            if(cellsRevealed === (ROWS * COLS) - MINES) {
+                gameOver(true);
+            }
+        }
+
+        // --- Evrensel Müzik Motoru ---
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        function toggleSound(){
+            const btn = document.getElementById('soundBtn');
+            if(bgMusic.paused){
+                bgMusic.play().then(()=>{btn.textContent='🔊';btn.classList.add('playing');}).catch(()=>{});
+            } else {
+                bgMusic.pause();btn.textContent='🔇';btn.classList.remove('playing');
+            }
+        }
+
+        // Disable native right-click menu heavily inside board
+        boardEl.addEventListener('contextmenu', e => e.preventDefault());
+
+        initGame();
+    </script>
+</body>
+</html>

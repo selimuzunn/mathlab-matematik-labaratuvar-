@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matematiksel Hafıza — MathLab</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .hafiza-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .hafiza-toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: rgba(30,25,70,.6);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.1);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .board-wrapper {
+            width: 100%;
+            max-width: 550px;
+            margin: 0 auto;
+        }
+        .hafiza-board {
+            display: grid;
+            gap: 12px;
+            justify-content: center;
+        }
+        .grid-16 { grid-template-columns: repeat(4, 1fr); }
+        .grid-24 { grid-template-columns: repeat(6, 1fr); }
+
+        .memory-card {
+            width: 100%;
+            aspect-ratio: 1; /* Kare */
+            perspective: 1000px;
+            cursor: pointer;
+        }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .memory-card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 800;
+            padding: 5px;
+            user-select: none;
+        }
+        .card-front {
+            /* Ön yüz aslında kapalı olan taraf (oyun dilinde) */
+            background: linear-gradient(135deg, rgba(123, 47, 247, 0.8), rgba(0, 210, 255, 0.6));
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: transparent;
+            font-size: 2rem;
+            text-shadow: 0 0 10px rgba(255,255,255,0.2);
+        }
+        .card-front::after {
+            content: '❓';
+            color: rgba(255,255,255,0.7);
+            font-size: 1.5rem;
+        }
+        .card-back {
+            /* Arka yüz açık olan taraf (yazı okunan) */
+            background: rgba(30, 25, 70, 0.95);
+            border: 2px solid #00d2ff;
+            color: #fff;
+            transform: rotateY(180deg);
+            box-shadow: inset 0 0 20px rgba(0,210,255,0.2);
+            word-break: break-word;
+            line-height: 1.2;
+        }
+        .memory-card.matched .card-inner {
+            transform: rotateY(180deg) scale(0.95);
+        }
+        .memory-card.matched .card-back {
+            background: rgba(40, 100, 60, 0.9);
+            border-color: #44ff88;
+            box-shadow: 0 0 20px rgba(68,255,136,0.5);
+            color: #44ff88;
+        }
+        .memory-card.error .card-back {
+            background: rgba(100, 30, 40, 0.9);
+            border-color: #ff6b6b;
+            box-shadow: 0 0 20px rgba(255,107,107,0.5);
+            color: #ff6b6b;
+        }
+
+        @media (max-width: 600px) {
+            .grid-16 { grid-template-columns: repeat(4, 1fr); gap: 8px;}
+            .grid-24 { grid-template-columns: repeat(4, 1fr); gap: 6px;} /* Mobilde 6 sütun sıkışır, 4 daha iyi */
+            .card-back { font-size: 0.9rem; }
+            .card-front::after { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-btn">⬅ Ana Sayfa</a>
+        <h1>🎴 Matematiksel Hafıza</h1>
+        <p>Aynı resimleri değil; işlemleri ve matematiksel yanıtlarını akılda tutarak eşleştirin! (Örn: "5+7" ile "12")</p>
+        <button id="soundBtn" onclick="toggleSound()" title="Müzik Aç/Kapat">🔇</button>
+    </header>
+    <audio id="bgMusic" loop preload="auto" src="mondamusic-calm-soft-499189.mp3"></audio>
+
+    <div class="main-container hafiza-container">
+        <div class="hafiza-toolbar">
+            <select id="diffSelect" class="btn" style="background: rgba(123, 47, 247, 0.2); outline: none;" onchange="initGame()">
+                <option value="16" style="background:#1e1946;" selected>16 Kart (8 Çift)</option>
+                <option value="24" style="background:#1e1946;">24 Kart (12 Çift)</option>
+            </select>
+            <button class="btn" onclick="initGame()">Dağıt</button>
+            <div class="game2048-score" style="margin:0;">Hamle: <span id="movesVal">0</span></div>
+        </div>
+
+        <div class="board-wrapper">
+            <div class="hafiza-board grid-16" id="board"></div>
+        </div>
+
+        <div id="resultScreen" style="display:none; text-align:center; padding:10px; color:#44ff88; text-shadow:0 0 15px rgba(68,255,136,.5); margin-top:20px;">
+            <div style="font-size:1.8rem; font-weight:800; margin-bottom: 20px;">Harika Hafıza! Oyunu Bitirdiniz 🎉</div>
+            <button class="btn" style="background: rgba(68,255,136,0.2); border-color: #44ff88; font-size: 1.1rem;" onclick="initGame()">Yeniden Oyna (Yeni İşlemlerle)</button>
+        </div>
+    </div>
+
+    <script>
+        const uniquePairs = [
+            { q: '5 + 7', a: '12' },
+            { q: '9 × 8', a: '72' },
+            { q: '√81', a: '9' },
+            { q: '2³', a: '8' },
+            { q: '100 / 4', a: '25' },
+            { q: '15 - 9', a: '6' },
+            { q: '7 × 7', a: '49' },
+            { q: '40’ın %50’si', a: '20' },
+            { q: '0 × 99', a: '0' },
+            { q: '100 - 45', a: '55' },
+            { q: '5 × 20', a: '100' },
+            { q: '1/2', a: '0.5' },
+            { q: '6 × 6', a: '36' },
+            { q: '13 - 6', a: '7' },
+            { q: '4²', a: '16' },
+            { q: '3 × 15', a: '45' },
+            { q: '√100', a: '10' },
+            { q: '1 + 1', a: '2' },
+            { q: '5³', a: '125' },
+            { q: '200 / 5', a: '40' },
+            { q: '11 × 11', a: '121' },
+            { q: '300’ün %10’u', a: '30' },
+            { q: '5 × 3', a: '15' },
+            { q: '60 / 20', a: '3' },
+            { q: '9 - 8', a: '1' },
+            { q: '7 + 11', a: '18' },
+            { q: '8 × 4', a: '32' },
+            { q: '√16', a: '4' },
+            { q: '9 × 9', a: '81' },
+            { q: '50 - 28', a: '22' },
+            { q: '3³', a: '27' },
+            { q: '2 × 70', a: '140' },
+            { q: '80 / 16', a: '5' },
+            { q: '4 × 15', a: '60' }
+        ];
+
+        let cardsCount = 16;
+        let cardsArr = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let moves = 0;
+        let isLocked = false;
+
+        const boardEl = document.getElementById('board');
+        const movesEl = document.getElementById('movesVal');
+        const resultEl = document.getElementById('resultScreen');
+
+        function initGame() {
+            cardsCount = parseInt(document.getElementById('diffSelect').value);
+            let pairsNeeded = cardsCount / 2;
+            
+            // Randomly pick unique pairs
+            let shuffledPairs = [...uniquePairs].sort(() => 0.5 - Math.random()).slice(0, pairsNeeded);
+            
+            cardsArr = [];
+            shuffledPairs.forEach((p, index) => {
+                // Her çift için 2 kart (Biri soru, biri cevap) id'leri aynı olacak.
+                cardsArr.push({ id: index, text: p.q });
+                cardsArr.push({ id: index, text: p.a });
+            });
+
+            // Kartları karıştır
+            cardsArr.sort(() => 0.5 - Math.random());
+
+            matchedPairs = 0;
+            moves = 0;
+            isLocked = false;
+            flippedCards = [];
+            movesEl.textContent = moves;
+            resultEl.style.display = 'none';
+
+            boardEl.className = 'hafiza-board ' + (cardsCount === 16 ? 'grid-16' : 'grid-24');
+            boardEl.innerHTML = '';
+
+            cardsArr.forEach((card, index) => {
+                let cardEl = document.createElement('div');
+                cardEl.className = 'memory-card';
+                cardEl.dataset.id = card.id;
+                cardEl.dataset.index = index;
+
+                cardEl.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-front"></div>
+                        <div class="card-back">${card.text}</div>
+                    </div>
+                `;
+                
+                cardEl.addEventListener('click', () => flipCard(cardEl));
+                boardEl.appendChild(cardEl);
+            });
+        }
+
+        function flipCard(cardEl) {
+            if(isLocked) return;
+            if(cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
+
+            cardEl.classList.add('flipped');
+            flippedCards.push(cardEl);
+
+            if(flippedCards.length === 2) {
+                moves++;
+                movesEl.textContent = moves;
+                checkForMatch();
+            }
+        }
+
+        function checkForMatch() {
+            let card1 = flippedCards[0];
+            let card2 = flippedCards[1];
+            let isMatch = card1.dataset.id === card2.dataset.id;
+
+            if(isMatch) {
+                // Eşleşti!
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                flippedCards = [];
+                matchedPairs++;
+                if(matchedPairs === cardsCount / 2) {
+                    setTimeout(() => {
+                        resultEl.style.display = 'block';
+                    }, 500);
+                }
+            } else {
+                // Eşleşmedi, hata rengi yak sonra kapat
+                isLocked = true;
+                card1.classList.add('error');
+                card2.classList.add('error');
+                
+                // Titreşim (Opsiyonel)
+                if(navigator.vibrate) navigator.vibrate(40);
+
+                setTimeout(() => {
+                    card1.classList.remove('flipped', 'error');
+                    card2.classList.remove('flipped', 'error');
+                    flippedCards = [];
+                    isLocked = false;
+                }, 1000);
+            }
+        }
+
+        // --- Evrensel Müzik Motoru ---
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        function toggleSound(){
+            const btn = document.getElementById('soundBtn');
+            if(bgMusic.paused){
+                bgMusic.play().then(()=>{btn.textContent='🔊';btn.classList.add('playing');}).catch(()=>{});
+            } else {
+                bgMusic.pause();btn.textContent='🔇';btn.classList.remove('playing');
+            }
+        }
+
+        initGame();
+    </script>
+</body>
+</html>

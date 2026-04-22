@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hanoi Kuleleri — MathLab</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .hanoi-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .hanoi-toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: rgba(30,25,70,.6);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.1);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .hanoi-board {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-end;
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            background: rgba(15, 12, 41, .9);
+            border: 4px solid #7b2ff7;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(123, 47, 247, 0.2);
+            padding: 20px 0;
+            position: relative;
+        }
+        /* Base Platform */
+        .hanoi-board::after {
+            content: '';
+            position: absolute;
+            bottom: 10px;
+            left: 5%;
+            width: 90%;
+            height: 10px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.1);
+        }
+        .pole-area {
+            position: relative;
+            width: 30%;
+            height: 95%; /* Above the platform */
+            display: flex;
+            flex-direction: column-reverse; /* Stacks upwards */
+            align-items: center;
+            cursor: pointer;
+            z-index: 10;
+        }
+        /* The physical pole line */
+        .pole-line {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 100%;
+            background: linear-gradient(to top, rgba(123,47,247,0.8), rgba(0,210,255,0.3));
+            border-radius: 6px 6px 0 0;
+            z-index: -1;
+        }
+        .pole-area:hover .pole-line {
+            box-shadow: 0 0 15px rgba(0,210,255,0.6);
+        }
+        .pole-area.selected .pole-line {
+            box-shadow: 0 0 20px rgba(68,255,136,0.8);
+            background: linear-gradient(to top, rgba(68,255,136,0.8), rgba(255,255,255,0.3));
+        }
+
+        .disk {
+            height: 28px;
+            border-radius: 14px;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: 800;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            transition: transform 0.2s, background 0.3s;
+            box-shadow: inset 0 0 10px rgba(255,255,255,0.3), 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .disk.selected {
+            transform: translateY(-30px); /* Kule direğinden havaya kalksın */
+            box-shadow: 0 0 20px #fff;
+        }
+
+        @media (max-width: 600px) {
+            .hanoi-board { height: 250px; }
+            .disk { height: 20px; font-size: 0.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-btn">⬅ Ana Sayfa</a>
+        <h1>🗼 Hanoi Kuleleri</h1>
+        <p>Büyük disk küçüğün üstüne gelemez. Tüm kuleyi en sağdaki direğe taşıyın! (Bir direğe tıklayarak diski seçin, diğerine tıklayarak bırakın).</p>
+        <button id="soundBtn" onclick="toggleSound()" title="Müzik Aç/Kapat">🔇</button>
+    </header>
+    <audio id="bgMusic" loop preload="auto" src="mondamusic-calm-soft-499189.mp3"></audio>
+
+    <div class="main-container hanoi-container">
+        <div class="hanoi-toolbar">
+            <select id="diskCount" class="btn" style="background: rgba(123, 47, 247, 0.2); outline: none;" onchange="initGame()">
+                <option value="3" style="background:#1e1946;">3 Disk (Kolay)</option>
+                <option value="4" style="background:#1e1946;" selected>4 Disk (Orta)</option>
+                <option value="5" style="background:#1e1946;">5 Disk (Zor)</option>
+                <option value="6" style="background:#1e1946;">6 Disk (Çok Zor)</option>
+                <option value="7" style="background:#1e1946;">7 Disk (Efsane)</option>
+            </select>
+            <button class="btn" onclick="initGame()">Yeniden Başla</button>
+            <div class="game2048-score" style="margin: 0;">Hamle: <span id="movesVal">0</span></div>
+            <div class="game2048-score" style="margin: 0; display:none;" id="minMovesBox">Min: <span id="minMovesVal">0</span></div>
+        </div>
+
+        <div class="hanoi-board" id="board">
+            <!-- 3 Poles -->
+            <div class="pole-area" id="pole0" onclick="handlePoleClick(0)">
+                <div class="pole-line"></div>
+            </div>
+            <div class="pole-area" id="pole1" onclick="handlePoleClick(1)">
+                <div class="pole-line"></div>
+            </div>
+            <div class="pole-area" id="pole2" onclick="handlePoleClick(2)">
+                <div class="pole-line"></div>
+            </div>
+        </div>
+
+        <div id="resultScreen" style="display:none; text-align:center; padding:10px; font-size:1.5rem; font-weight:800; color:#44ff88; text-shadow:0 0 15px rgba(68,255,136,.5);">
+            Tebrikler! Bulmacayı mükemmel çözdünüz 🎉
+        </div>
+    </div>
+
+    <script>
+        let towers = [[], [], []];
+        let numDisks = 4;
+        let moves = 0;
+        let selectedPole = null;
+        let isWon = false;
+
+        const colors = [
+            'linear-gradient(90deg, #ff0055, #ff0099)',
+            'linear-gradient(90deg, #ff6b6b, #ff8e53)',
+            'linear-gradient(90deg, #ffaa00, #ffea00)',
+            'linear-gradient(90deg, #44ff88, #00d2ff)',
+            'linear-gradient(90deg, #00d2ff, #2a5298)',
+            'linear-gradient(90deg, #7b2ff7, #bd34fe)',
+            'linear-gradient(90deg, #bd34fe, #ff0055)'
+        ];
+
+        function initGame() {
+            numDisks = parseInt(document.getElementById('diskCount').value);
+            towers = [[], [], []];
+            moves = 0;
+            selectedPole = null;
+            isWon = false;
+            
+            document.getElementById('movesVal').textContent = moves;
+            document.getElementById('resultScreen').style.display = 'none';
+
+            let minMoves = Math.pow(2, numDisks) - 1;
+            document.getElementById('minMovesVal').textContent = minMoves;
+            document.getElementById('minMovesBox').style.display = 'block';
+
+            // Fill first tower (index 0 is bottom conceptually in the array, but rendering handles it)
+            // Wait, array index 0. If array is [7, 6, 5], 5 is top.
+            // When we render flex-direction: column-reverse, standard DOM appendChild puts first element at bottom!
+            // So index 0 = bottom disk.
+            for(let i = numDisks; i >= 1; i--) {
+                towers[0].push(i);
+            }
+            renderTowers();
+        }
+
+        function renderTowers() {
+            for(let p = 0; p < 3; p++) {
+                const poleEl = document.getElementById('pole' + p);
+                // Clear all disks except the pole-line which is .pole-line
+                Array.from(poleEl.children).forEach(child => {
+                    if(!child.classList.contains('pole-line')) {
+                        poleEl.removeChild(child);
+                    }
+                });
+                poleEl.classList.remove('selected');
+
+                if(selectedPole === p) {
+                    poleEl.classList.add('selected');
+                }
+
+                towers[p].forEach((diskVal, index) => {
+                    let diskEl = document.createElement('div');
+                    diskEl.className = 'disk';
+                    // Dynamic width: min 30%, max 95%
+                    let widthPercent = 30 + (diskVal / 7) * 65;
+                    diskEl.style.width = widthPercent + '%';
+                    diskEl.style.background = colors[(diskVal - 1) % colors.length];
+                    diskEl.textContent = diskVal;
+
+                    // If this is the top disk of the selected pole, animate it UP
+                    if(selectedPole === p && index === towers[p].length - 1) {
+                        diskEl.classList.add('selected');
+                    }
+
+                    poleEl.appendChild(diskEl);
+                });
+            }
+        }
+
+        function handlePoleClick(p) {
+            if(isWon) return;
+
+            // Eğer bir direk zaten seçiliyse: (Düşürme hamlesi)
+            if(selectedPole !== null) {
+                if(selectedPole === p) {
+                    // Aynı direğe tıklarsa seçimi iptal et
+                    selectedPole = null;
+                } else {
+                    let topFrom = towers[selectedPole][towers[selectedPole].length - 1];
+                    let topTo = towers[p].length > 0 ? towers[p][towers[p].length - 1] : 999;
+
+                    if(topFrom < topTo) {
+                        // Geçerli Hamle
+                        let disk = towers[selectedPole].pop();
+                        towers[p].push(disk);
+                        moves++;
+                        document.getElementById('movesVal').textContent = moves;
+                        selectedPole = null;
+                        checkWin();
+                    } else {
+                        // Hatalı Hamle (Büyük diski küçüğe alamaz)
+                        let poleEl = document.getElementById('pole' + p);
+                        poleEl.style.animation = 'shake 0.3s';
+                        setTimeout(() => poleEl.style.animation = '', 300);
+                        selectedPole = null;
+                    }
+                }
+            } else {
+                // Hiçbir direk seçili değil, kaldırmak için seç
+                if(towers[p].length > 0) {
+                    selectedPole = p;
+                }
+            }
+            renderTowers();
+        }
+
+        function checkWin() {
+            if(towers[2].length === numDisks) {
+                isWon = true;
+                selectedPole = null;
+                document.getElementById('resultScreen').style.display = 'block';
+            }
+        }
+
+        // --- Evrensel Müzik Motoru ---
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        function toggleSound(){
+            const btn = document.getElementById('soundBtn');
+            if(bgMusic.paused){
+                bgMusic.play().then(()=>{btn.textContent='🔊';btn.classList.add('playing');}).catch(()=>{});
+            } else {
+                bgMusic.pause();btn.textContent='🔇';btn.classList.remove('playing');
+            }
+        }
+
+        // Shake anim
+        const style = document.createElement('style');
+        style.innerHTML = `@keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }`;
+        document.head.appendChild(style);
+
+        initGame();
+    </script>
+</body>
+</html>

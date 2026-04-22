@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Sudoku — MathLab</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-btn">⬅ Ana Sayfa</a>
+        <h1>🧩 Neon Sudoku</h1>
+        <p>Klasik kurallarla doldurun. 3 Hata hakkınız var, tükenirse tekrar başlarsınız!</p>
+        <button id="soundBtn" onclick="toggleSound()" title="Müzik Aç/Kapat">🔇</button>
+    </header>
+    <audio id="bgMusic" loop preload="auto" src="mondamusic-calm-soft-499189.mp3"></audio>
+
+    <div class="main-container sudoku-container">
+        <div class="sudoku-toolbar">
+            <select id="diffSelect" class="btn" style="background: rgba(123, 47, 247, 0.2); outline: none;" onchange="startGame()">
+                <option value="easy" style="background:#1e1946;">Kolay</option>
+                <option value="medium" style="background:#1e1946;" selected>Orta</option>
+                <option value="hard" style="background:#1e1946;">Zor</option>
+            </select>
+            <button class="btn" onclick="startGame()">Yeniden Dağıt</button>
+            <div class="mistake-counter">Hatalar: <span id="mistakeVal">0</span> / 3</div>
+        </div>
+
+        <div class="sudoku-board" id="board"></div>
+
+        <div id="resultScreen" style="display:none; text-align:center; padding:20px; color:#44ff88; font-size:1.8rem; font-weight:800; text-shadow:0 0 15px rgba(68,255,136,.5);">
+            Tebrikler! Bulmacayı Çözdünüz 🎉
+        </div>
+    </div>
+
+    <!-- Algorithm and UI logic -->
+    <script>
+        // Mükemmel geçerli bir Sudoku zemini
+        const initialBoard = [
+            [1,2,3, 4,5,6, 7,8,9],
+            [4,5,6, 7,8,9, 1,2,3],
+            [7,8,9, 1,2,3, 4,5,6],
+            [2,3,1, 5,6,4, 8,9,7],
+            [5,6,4, 8,9,7, 2,3,1],
+            [8,9,7, 2,3,1, 5,6,4],
+            [3,1,2, 6,4,5, 9,7,8],
+            [6,4,5, 9,7,8, 3,1,2],
+            [9,7,8, 3,1,2, 6,4,5]
+        ];
+
+        function cloneBoard(b) { return b.map(r => r.slice()); }
+
+        // Tahtayı kendi içinde kurallara uygun olarak harmanlama (Karıştırma) algoritması
+        function shuffle(board) {
+            let b = cloneBoard(board);
+            // 1. Sayıların yerlerini komple değiştir
+            for(let i=1; i<=9; i++) {
+                let n1 = Math.floor(Math.random()*9)+1;
+                let n2 = Math.floor(Math.random()*9)+1;
+                for(let r=0; r<9; r++) {
+                    for(let c=0; c<9; c++) {
+                        if(b[r][c]===n1) b[r][c]=-1;
+                        else if(b[r][c]===n2) b[r][c]=n1;
+                    }
+                }
+                for(let r=0; r<9; r++) for(let c=0; c<9; c++) if(b[r][c]===-1) b[r][c]=n2;
+            }
+            // 2. 3x3'lük blok içi satırları karıştır
+            for(let block=0; block<3; block++){
+                let r1 = block*3 + Math.floor(Math.random()*3);
+                let r2 = block*3 + Math.floor(Math.random()*3);
+                let temp = b[r1]; b[r1] = b[r2]; b[r2] = temp;
+            }
+            // 3. 3x3'lük blok içi sütunları karıştır
+            for(let block=0; block<3; block++){
+                let c1 = block*3 + Math.floor(Math.random()*3);
+                let c2 = block*3 + Math.floor(Math.random()*3);
+                for(let r=0; r<9; r++){ let temp=b[r][c1]; b[r][c1]=b[r][c2]; b[r][c2]=temp; }
+            }
+            // 4. Ana yatay blokları kendi arasında karıştır
+            let rb1 = Math.floor(Math.random()*3)*3;
+            let rb2 = Math.floor(Math.random()*3)*3;
+            for(let i=0; i<3; i++){ let t=b[rb1+i]; b[rb1+i]=b[rb2+i]; b[rb2+i]=t; }
+            return b;
+        }
+
+        let solution = [];
+        let puzzle = [];
+        let mistakes = 0;
+
+        function generatePuzzle(difficulty) {
+            solution = shuffle(initialBoard);
+            puzzle = cloneBoard(solution);
+            
+            // Zorluğa göre silecek element sayısı
+            let holes = 40; // Orta
+            if(difficulty==='easy') holes = 30;
+            else if(difficulty==='hard') holes = 52;
+
+            let k = 0;
+            while(k < holes) {
+                let r = Math.floor(Math.random()*9);
+                let c = Math.floor(Math.random()*9);
+                if(puzzle[r][c] !== 0) {
+                    puzzle[r][c] = 0;
+                    k++;
+                }
+            }
+        }
+
+        const boardEl = document.getElementById('board');
+        const mistakeEl = document.getElementById('mistakeVal');
+        const resultEl = document.getElementById('resultScreen');
+
+        function startGame() {
+            mistakes = 0;
+            mistakeEl.textContent = '0';
+            resultEl.style.display = 'none';
+            const diff = document.getElementById('diffSelect').value;
+            generatePuzzle(diff);
+            renderBoard();
+        }
+
+        function renderBoard() {
+            boardEl.innerHTML = '';
+            for(let r=0; r<9; r++) {
+                for(let c=0; c<9; c++) {
+                    let cell = document.createElement('div');
+                    cell.className = 'sudoku-cell col-'+c+' row-'+r;
+                    
+                    if(puzzle[r][c] !== 0) {
+                        cell.classList.add('fixed');
+                        cell.innerHTML = '<input type="text" value="'+puzzle[r][c]+'" readonly tabindex="-1">';
+                    } else {
+                        let inp = document.createElement('input');
+                        inp.type = 'text';
+                        inp.maxLength = 1;
+                        // Sadece rakamlara izin ver
+                        inp.onkeypress = (e) => {
+                            if (!/[1-9]/.test(e.key)) e.preventDefault();
+                        };
+                        inp.oninput = (e) => handleInput(inp, r, c);
+                        cell.appendChild(inp);
+                    }
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function handleInput(inp, r, c) {
+            let val = parseInt(inp.value);
+            const cell = inp.parentElement;
+            cell.classList.remove('error');
+            
+            if(isNaN(val)) { 
+                inp.value = ''; 
+                return; 
+            }
+            
+            // Kullanıcı doğru bilmediyse:
+            if(val !== solution[r][c]) {
+                cell.classList.add('error');
+                mistakes++;
+                mistakeEl.textContent = mistakes;
+                if(mistakes >= 3) {
+                    setTimeout(() => {
+                        alert('Dikkat: 3 Hata yaptınız! Oyun baştan başlıyor.');
+                        startGame();
+                    }, 100);
+                }
+            } else {
+                // DOĞRU BİLDİYSE
+                inp.disabled = true; 
+                inp.style.color = '#fff'; // Doğru yazının rengi tam beyaz olsun
+                cell.style.background = 'rgba(68, 255, 136, 0.1)';
+                checkWin();
+            }
+        }
+
+        function checkWin() {
+            let inputs = boardEl.querySelectorAll('input:not([readonly])');
+            let won = true;
+            inputs.forEach(i => { if(!i.disabled) won = false; });
+            if(won) {
+                resultEl.style.display = 'block';
+            }
+        }
+
+        // --- Müzik Modülü ---
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        function toggleSound(){
+            const btn = document.getElementById('soundBtn');
+            if(bgMusic.paused){
+                bgMusic.play().then(()=>{btn.textContent='🔊';btn.classList.add('playing');}).catch(()=>{});
+            } else {
+                bgMusic.pause();btn.textContent='🔇';btn.classList.remove('playing');
+            }
+        }
+
+        // Sayfa açıldığında başlat
+        startGame();
+    </script>
+</body>
+</html>

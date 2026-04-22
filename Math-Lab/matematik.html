@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Görsel Zekâ ve Mantık Oyunları — MathLab</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .quiz-container {
+            max-width: 800px;
+            margin: 40px auto;
+            text-align: center;
+        }
+        .progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00d2ff, #7b2ff7);
+            width: 0%;
+            transition: width 0.4s ease;
+        }
+        .question-box {
+            background: rgba(30, 25, 70, .6);
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            transition: all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        .question-box.hide {
+            opacity: 0;
+            transform: scale(0.9) translateY(20px);
+        }
+        .question-level {
+            font-size: 1rem;
+            color: #7b2ff7;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        .helper-text {
+            font-size: 1.2rem;
+            color: #ddd;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        canvas {
+            background: rgba(10, 10, 26, 0.5);
+            border: 2px solid rgba(123, 47, 247, 0.3);
+            border-radius: 12px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            margin-bottom: 25px;
+            width: 100%;
+            max-width: 600px;
+            height: 300px;
+        }
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+        @media (max-width: 600px) {
+            .options-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        .option-btn {
+            padding: 15px;
+            font-size: 1.4rem;
+            font-weight: 800;
+            border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: #eee;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .option-btn:hover {
+            background: rgba(123, 47, 247, 0.2);
+            border-color: #7b2ff7;
+            transform: translateY(-2px);
+        }
+        .option-btn.correct {
+            background: rgba(68, 255, 136, 0.2);
+            border-color: #44ff88;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(68, 255, 136, 0.4);
+        }
+        .option-btn.wrong {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: #ff6b6b;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
+        }
+        
+        .result-screen {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            background: rgba(30, 25, 70, .6);
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }
+        .result-screen h2 {
+            font-size: 3rem;
+            color: #00d2ff;
+            margin-bottom: 20px;
+        }
+        .result-screen p {
+            font-size: 1.5rem;
+            color: #eee;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="back-btn">⬅ Ana Sayfa</a>
+        <h1>🧮 Görsel Mantık & Zekâ</h1>
+        <p>50 Boyutlu görsel zekâ, mantık ve matematiksel örüntü laboratuvarı.</p>
+        <button id="soundBtn" onclick="toggleSound()" title="Müzik Aç/Kapat">🔇</button>
+    </header>
+    <audio id="bgMusic" loop preload="auto" src="mondamusic-calm-soft-499189.mp3"></audio>
+
+    <div class="main-container">
+        <div class="quiz-container">
+            <div class="progress-bar-container" id="progContainer">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            
+            <div class="question-box hide" id="qBox">
+                <div class="question-level" id="qLevel">Seviye 1 / 50</div>
+                <div class="helper-text" id="qText"></div>
+                <canvas id="mathCanvas" width="600" height="300"></canvas>
+                <div class="options-grid" id="optionsGrid">
+                    <!-- Butonlar JavaScript ile doldurulacak -->
+                </div>
+            </div>
+
+            <div class="result-screen" id="resultScreen">
+                <h2>Oyun Bitti! 🎉</h2>
+                <p>Skorunuz: <span id="finalScore">0</span> / 50</p>
+                <button class="btn" onclick="location.reload()">Tekrar Oyna</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const NUM_QUESTIONS = 50;
+        const questions = [];
+
+        function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+        function generateOptions(ans, count) {
+            let set = new Set();
+            set.add(ans);
+            while(set.size < count) {
+                // Eğer kesirli sayı (metin) ise
+                if(typeof ans === 'string' && ans.includes('/')) {
+                    let parts = ans.split('/');
+                    let a = parseInt(parts[0]); let b = parseInt(parts[1]);
+                    set.add(`${a + rnd(1,3)}/${b}`);
+                } else {
+                    let off = rnd(1, 10);
+                    if(Math.random() > 0.5 || ans - off <= 0) set.add(ans + off);
+                    else set.add(ans - off);
+                }
+            }
+            return Array.from(set).sort(() => Math.random() - 0.5);
+        }
+
+        function drawShape(ctx, shape, x, y, size, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            if(shape === 'circle') { ctx.arc(x, y, size/2, 0, Math.PI*2); }
+            else if(shape === 'square') { ctx.rect(x - size/2, y - size/2, size, size); }
+            else if(shape === 'triangle') { ctx.moveTo(x, y-size/2); ctx.lineTo(x+size/2, y+size/2); ctx.lineTo(x-size/2, y+size/2); }
+            else if(shape === 'pentagon') { 
+                for(let a=0; a<5; a++){ let ang = a*Math.PI*2/5 - Math.PI/2; ctx[a===0?'moveTo':'lineTo'](x+Math.cos(ang)*size/2, y+Math.sin(ang)*size/2); }
+            }
+            ctx.fill();
+        }
+
+        for(let i = 1; i <= NUM_QUESTIONS; i++) {
+            let type = i % 5;
+            let diff = Math.ceil(i / 10); // Zorluk 1 - 5
+            
+            let puzzle = { text: "Bulmacayı çözün.", correctAnswer: "", options: [], render: null };
+
+            if(type === 1) { // 1. TİP: TERAZİ (BALANCE)
+                let itemVal = rnd(2, 5) * diff;
+                let leftCount = rnd(2, 4);
+                let totalWeight = leftCount * itemVal;
+                
+                puzzle.text = "Terazinin dengede kalması için mavi kare (◼) kaç birim ağırlığında olmalıdır?";
+                puzzle.correctAnswer = itemVal;
+                puzzle.render = function(ctx, w, h) {
+                    // Terazi ayağı ve kolları
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
+                    ctx.beginPath(); ctx.moveTo(w/2, 250); ctx.lineTo(w/2, 120); ctx.moveTo(w/2-120, 120); ctx.lineTo(w/2+120, 120); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(w/2-120, 120); ctx.lineTo(w/2-120, 180); ctx.moveTo(w/2+120, 120); ctx.lineTo(w/2+120, 180); ctx.stroke();
+                    // Kefeler
+                    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                    ctx.fillRect(w/2-160, 180, 80, 10); ctx.fillRect(w/2+80, 180, 80, 10);
+                    // Sol Kefe Objeleri (Kareler)
+                    for(let j=0; j<leftCount; j++) {
+                        drawShape(ctx, 'square', w/2-120 + (j - leftCount/2 + 0.5)*20, 170, 16, '#00d2ff');
+                    }
+                    // Sağ Kefe (Toplam Ağırlık)
+                    ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 30px Inter'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
+                    ctx.fillText(totalWeight.toString(), w/2+120, 165); // ağırık text'i
+                };
+            } 
+            else if(type === 2) { // 2. TİP: SEMBOL TABLOSU (LOGIC GRID)
+                let valA = rnd(2, 6) + diff;
+                let valB = rnd(1, 5) + diff;
+                let sR1 = valA + valA;
+                let sR2 = valA + valB;
+                let sC1 = valA + valA;
+                let sC2 = valA + valB;
+                
+                puzzle.text = "Satır ve sütun toplamlarına göre, kırmızı üçgenin (▲) değeri kaçtır?";
+                puzzle.correctAnswer = valB;
+                puzzle.render = function(ctx, w, h) {
+                    let stX = w/2 - 60, stY = h/2 - 70;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2;
+                    for(let j=0; j<=2; j++) {
+                        ctx.beginPath(); ctx.moveTo(stX, stY + j*60); ctx.lineTo(stX + 120, stY + j*60); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(stX + j*60, stY); ctx.lineTo(stX + j*60, stY + 120); ctx.stroke();
+                    }
+                    drawShape(ctx, 'circle', stX + 30, stY + 30, 24, '#00d2ff');
+                    drawShape(ctx, 'circle', stX + 90, stY + 30, 24, '#00d2ff');
+                    drawShape(ctx, 'circle', stX + 30, stY + 90, 24, '#00d2ff');
+                    drawShape(ctx, 'triangle', stX + 90, stY + 90, 24, '#ff6b6b');
+                    
+                    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px Inter'; ctx.textAlign = 'left'; ctx.textBaseline='middle';
+                    ctx.fillText("=  " + sR1, stX + 140, stY + 30);
+                    ctx.fillText("=  " + sR2, stX + 140, stY + 90);
+                    ctx.textAlign = 'center';
+                    ctx.fillText("⇓", stX + 30, stY + 140); ctx.fillText("⇓", stX + 90, stY + 140);
+                    ctx.fillText(sC1, stX + 30, stY + 165); ctx.fillText(sC2, stX + 90, stY + 165);
+                };
+            }
+            else if(type === 3) { // 3. TİP: KESİRLER / PARÇALI ŞEKİL
+                let totalParts = diff >= 3 ? 12 : (diff >= 2 ? 8 : 4);
+                let filled = rnd(1, totalParts-1);
+                
+                function gcd(a,b) { return b ? gcd(b, a%b) : a; }
+                let d = gcd(filled, totalParts);
+                let ans = `${filled/d}/${totalParts/d}`;
+                
+                puzzle.text = "Parlak mavi boyalı alanın toplam alana oranı (en sade hali) nedir?";
+                puzzle.correctAnswer = ans;
+                puzzle.render = function(ctx, w, h) {
+                    let cols = totalParts/2; let rows = 2;
+                    let stX = w/2 - (cols*40)/2;
+                    let stY = h/2 - 40;
+                    let count = 0;
+                    // Draw outer rect
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+                    ctx.strokeRect(stX-2, stY-2, cols*40+4, rows*40+4);
+                    
+                    ctx.lineWidth = 1;
+                    for(let r=0; r<rows; r++) {
+                        for(let c=0; c<cols; c++) {
+                            if (count < filled) { ctx.fillStyle = 'rgba(0, 210, 255, 0.8)'; ctx.shadowBlur=10; ctx.shadowColor='#00d2ff'; }
+                            else { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.shadowBlur=0; }
+                            ctx.fillRect(stX + c*40, stY + r*40, 40, 40);
+                            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                            ctx.strokeRect(stX + c*40, stY + r*40, 40, 40);
+                            count++;
+                        }
+                    }
+                    ctx.shadowBlur=0;
+                };
+            }
+            else if(type === 4) { // 4. TİP: KÜP SAYMA (3D İZOMETRİK)
+                let dim = diff >= 3 ? 3 : 2;
+                let grid = []; let totalCubes = 0;
+                for(let x=0; x<dim; x++) {
+                    grid[x] = [];
+                    for(let y=0; y<dim; y++) {
+                        let hgt = rnd(0, 3);
+                        // Make sure front element doesn't block entirely
+                        if (x===dim-1 && y===dim-1 && hgt>1) hgt=1; 
+                        if (x===0 && y===0 && hgt===0) hgt=1;
+                        grid[x][y] = hgt;
+                        totalCubes += hgt;
+                    }
+                }
+                if(totalCubes===0) { grid[0][0]=1; totalCubes=1; }
+                
+                puzzle.text = "Bu 3 boyutlu yapıda (arkada görünmeyenler dahil) toplam kaç adet birim küp vardır?";
+                puzzle.correctAnswer = totalCubes;
+                puzzle.render = function(ctx, w, h) {
+                    let size = 30; 
+                    for(let x = dim-1; x >= 0; x--) {
+                        for(let y = dim-1; y >= 0; y--) {
+                            let hgt = grid[x][y];
+                            for(let z = 0; z < hgt; z++) {
+                                let px = w/2 + (x - y) * size * 0.866;
+                                let py = h/2 + 60 + (x + y) * size * 0.5 - z * size * 1.1;
+                                ctx.lineWidth = 1; ctx.strokeStyle = '#1e1946';
+                                // Üst Yüz
+                                ctx.fillStyle = '#7b2ff7';
+                                ctx.beginPath(); ctx.moveTo(px, py-size); ctx.lineTo(px+size*.866, py-size*.5); ctx.lineTo(px, py); ctx.lineTo(px-size*.866, py-size*.5); ctx.fill(); ctx.stroke();
+                                // Sol Yüz
+                                ctx.fillStyle = '#591ec4';
+                                ctx.beginPath(); ctx.moveTo(px-size*.866, py-size*.5); ctx.lineTo(px, py); ctx.lineTo(px, py+size*.8); ctx.lineTo(px-size*.866, py+size*.3); ctx.fill(); ctx.stroke();
+                                // Sağ Yüz
+                                ctx.fillStyle = '#421299';
+                                ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px+size*.866, py-size*.5); ctx.lineTo(px+size*.866, py+size*.3); ctx.lineTo(px, py+size*.8); ctx.fill(); ctx.stroke();
+                            }
+                        }
+                    }
+                };
+            }
+            else { // 5. TİP: GÖRSEL ÖRÜNTÜ (KENAR SAYILARI)
+                let start = rnd(3, 4);
+                let current = start;
+                let step = rnd(1, 2);
+                let sequence = [];
+                for(let j=0; j<4; j++) { sequence.push(current); current += step; }
+                
+                puzzle.text = "Kuralı bulun: '?' işareti olan yere kaç kenarlı bir şekil gelmelidir?";
+                puzzle.correctAnswer = sequence[3];
+                puzzle.render = function(ctx, w, h) {
+                    let stX = w/2 - 180;
+                    ctx.textAlign = 'center'; ctx.textBaseline='middle';
+                    for(let j=0; j<4; j++) {
+                        let px = stX + j*120;
+                        let py = h/2;
+                        if(j === 3) {
+                            ctx.fillStyle = '#fff'; ctx.font='bold 36px Inter'; ctx.fillText("?", px, py);
+                            ctx.strokeStyle = '#00d2ff'; ctx.lineWidth=2; ctx.setLineDash([5,5]); ctx.strokeRect(px-30, py-30, 60, 60); ctx.setLineDash([]);
+                        } else {
+                            let sides = sequence[j];
+                            ctx.fillStyle = '#44ff88'; ctx.shadowBlur=15; ctx.shadowColor='#44ff88';
+                            ctx.beginPath();
+                            for(let a=0; a<sides; a++) {
+                                let ang = a * Math.PI*2 / sides - Math.PI/2;
+                                let tx = px + Math.cos(ang)*25;
+                                let ty = py + Math.sin(ang)*25;
+                                if(a===0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
+                            }
+                            ctx.closePath(); ctx.fill(); ctx.shadowBlur=0;
+                        }
+                        
+                        if(j < 3) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font='24px Inter'; ctx.fillText("➡", px + 60, py); }
+                    }
+                };
+            }
+
+            puzzle.options = generateOptions(puzzle.correctAnswer, 4);
+            questions.push(puzzle);
+        }
+
+        // --- GAME LOOP ---
+        let currentQIndex = 0;
+        let score = 0;
+        let isTransitioning = false;
+
+        const qBox = document.getElementById('qBox');
+        const qLevel = document.getElementById('qLevel');
+        const qText = document.getElementById('qText');
+        const optionsGrid = document.getElementById('optionsGrid');
+        const progressBar = document.getElementById('progressBar');
+        const resultScreen = document.getElementById('resultScreen');
+        const finalScore = document.getElementById('finalScore');
+        const progContainer = document.getElementById('progContainer');
+        const canvas = document.getElementById('mathCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function loadQuestion() {
+            isTransitioning = false;
+            
+            if (currentQIndex >= NUM_QUESTIONS) {
+                endGame();
+                return;
+            }
+
+            const q = questions[currentQIndex];
+            qLevel.textContent = `Seviye ${currentQIndex + 1} / ${NUM_QUESTIONS}`;
+            qText.textContent = q.text; // Text ipucu
+            progressBar.style.width = `${(currentQIndex / NUM_QUESTIONS) * 100}%`;
+
+            // Clear canvas and render
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            q.render(ctx, canvas.width, canvas.height);
+
+            // Populate options
+            optionsGrid.innerHTML = '';
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.textContent = opt;
+                btn.onclick = () => handleAnswer(btn, idx, q.options.indexOf(q.correctAnswer));
+                optionsGrid.appendChild(btn);
+            });
+            
+            setTimeout(() => { qBox.classList.remove('hide'); }, 50);
+        }
+
+        function handleAnswer(btnElement, selectedIdx, correctIdx) {
+            if(isTransitioning) return;
+            isTransitioning = true;
+            
+            const allBtns = optionsGrid.querySelectorAll('.option-btn');
+            
+            if(selectedIdx === correctIdx) {
+                btnElement.classList.add('correct');
+                score++;
+            } else {
+                btnElement.classList.add('wrong');
+                allBtns[correctIdx].classList.add('correct'); 
+            }
+
+            setTimeout(() => {
+                qBox.classList.add('hide');
+                currentQIndex++;
+                setTimeout(() => { loadQuestion(); }, 500); 
+            }, 1200); 
+        }
+
+        function endGame() {
+            qBox.style.display = 'none';
+            progContainer.style.display = 'none';
+            resultScreen.style.display = 'block';
+            finalScore.textContent = score;
+        }
+
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        function toggleSound(){
+            const btn = document.getElementById('soundBtn');
+            if(bgMusic.paused){ bgMusic.play().then(()=>{btn.textContent='🔊';btn.classList.add('playing');}).catch(()=>{}); } 
+            else { bgMusic.pause();btn.textContent='🔇';btn.classList.remove('playing'); }
+        }
+
+        // INIT
+        setTimeout(() => loadQuestion(), 100);
+    </script>
+</body>
+</html>
